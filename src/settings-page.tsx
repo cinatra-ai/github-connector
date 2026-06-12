@@ -6,7 +6,13 @@ import { Label } from "./components/ui/label";
 import { NangoManagedApiCard, NangoUserConnectButton } from "@cinatra-ai/sdk-ui/nango";
 import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
 import { saveGitHubConnectionAction, saveGitHubRepositorySelectionAction } from "./actions";
-import { getGitHubAPIStatus, getGitHubOAuthSettings, listGitHubRepositories } from "@/lib/github-api";
+// hostInternal pinned-empty sweep (cinatra#172 Stage H4): status/settings/
+// repository reads resolve the host-bound deps slot (bound at serverEntry
+// activation by `register(ctx)` adapting `@cinatra-ai/host:github-connection`)
+// instead of importing `@/lib/github-api`. The render keeps its grant-aware
+// `ctx` prop for the Nango port reads below — deps slot and ctx prop coexist
+// by design (actions CANNOT close over ctx; render-time reads may use either).
+import { getGitHubDeps } from "./deps";
 
 type GitHubSettingsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -22,8 +28,8 @@ function pickSearchParam(value: string | string[] | undefined) {
 
 export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPageProps) {
   const [settings, status, resolvedSearchParams] = await Promise.all([
-    getGitHubOAuthSettings(),
-    getGitHubAPIStatus(),
+    getGitHubDeps().getOAuthSettings(),
+    getGitHubDeps().getStatus(),
     (searchParams ?? Promise.resolve({})) as Promise<Record<string, string | string[] | undefined>>,
   ]);
 
@@ -39,7 +45,7 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
   const settingsConfigured = Boolean(settings.clientId && settings.clientSecret);
   const repositories =
     savedConnection
-      ? await listGitHubRepositories().catch(() => [])
+      ? await getGitHubDeps().listRepositories().catch(() => [])
       : [];
 
   return (
