@@ -3,6 +3,7 @@ import { ConnectorSettingsDialog } from "@cinatra-ai/sdk-ui";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
+import { Select } from "./components/ui/select";
 import { NangoManagedApiCard, NangoUserConnectButton } from "@cinatra-ai/sdk-ui/nango";
 import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
 import { saveGitHubConnectionAction, saveGitHubRepositorySelectionAction } from "./actions";
@@ -99,7 +100,7 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
           </div>
 
           <form action={saveGitHubConnectionAction} className="mt-6 grid gap-4 sm:grid-cols-2">
-            <input type="hidden" name="redirectTo" value="/configuration/llm/github" />
+            <Input type="hidden" name="redirectTo" value="/configuration/llm/github" />
             <Label className="grid gap-2">
               Client ID
               <Input
@@ -199,10 +200,10 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
 
               {repositories.length > 0 ? (
                 <form action={saveGitHubRepositorySelectionAction} className="mt-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <input type="hidden" name="redirectTo" value="/configuration/llm/github" />
+                  <Input type="hidden" name="redirectTo" value="/configuration/llm/github" />
                   <Label className="grid gap-2">
                     Repository
-                    <select
+                    <Select
                       name="repositoryFullName"
                       defaultValue={settings.selectedRepositoryFullName ?? ""}
                       className="rounded-control border border-line bg-surface-strong px-4 py-3"
@@ -213,7 +214,7 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
                           {repository.fullName} ({repository.visibility})
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </Label>
                   <div className="flex items-end">
                     <Button type="submit">Save repository</Button>
