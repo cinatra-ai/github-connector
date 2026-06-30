@@ -60,9 +60,12 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <span className={`rounded-full border px-3 py-1 text-xs uppercase ${status.status === "connected" ? "border-success/30 bg-success/10 text-success" : settingsConfigured ? "border-warning/30 bg-warning/10 text-warning" : "badge"}`}>
-                {status.status === "connected" ? "Connected" : settingsConfigured ? "Ready to connect" : "Setup required"}
-              </span>
+              {/* The connection-status badge is HOST-injected on the connector
+                  setup-page dispatch route — the same badge the /connectors card
+                  shows — so the extension no longer renders its own status pill
+                  here (it would duplicate the host badge). The title + form stay
+                  extension-owned, and `status.status` still drives the per-card
+                  badge + the saved-connection affordances below. */}
               <Link
                 href="/configuration/llm"
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-line text-muted-foreground transition hover:bg-surface-muted hover:text-foreground"
