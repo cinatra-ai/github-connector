@@ -47,6 +47,7 @@
     "apiVersion": "cinatra.ai/v1",
     "kind": "connector",
     "displayName": "GitHub",
+    "sdkAbiRange": "^2",
     "serverEntry": "./register",
     "requestedHostPorts": [
       "nango",
