@@ -57,7 +57,8 @@
       "nango",
       "capabilities"
     ],
-    "dependencies": []
+    "dependencies": [],
+    "consumes": []
   },
   "scripts": {
     "lint": "eslint . --no-inline-config"
