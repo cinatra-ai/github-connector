@@ -5,9 +5,14 @@
 // needs is delivered here, bound at activation by `register(ctx)` adapting the
 // per-concern host service published in the capability registry
 // (`@cinatra-ai/host:github-connection`).
+// Since cinatra#975 Wave 3 (epic #978) the connector OWNS the GitHub
+// connection client (`./lib/github-connection-client` — the relocated body of
+// core's `src/lib/github-api.ts`) and registers it under the SAME capability
+// id from `register(ctx)`; this deps slot keeps resolving the capability, so
+// its members are provider-agnostic across the cutover window.
 // Surfaces:
 //   - connection status  — aggregate status for the settings-page badge +
-//                          Nango card (`@/lib/github-api` stays host-side).
+//                          Nango card.
 //   - OAuth app settings — Nango-resolved client credentials + the stored
 //                          repository selection. The host-side
 //                          personal-access-token fallback is NOT published
