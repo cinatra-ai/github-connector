@@ -6,7 +6,7 @@ Connect a GitHub repository to Cinatra so your agents and workflows can read fro
 
 **Configure.** Open **Settings → GitHub** in the Cinatra UI. Paste your GitHub OAuth app's Client ID and Client Secret (the callback URL is pre-filled for you), save, then click **Connect GitHub**. Once the OAuth flow completes, choose the repository Cinatra should use and save the selection. The connection status badge turns green when both the OAuth credentials and a repository selection are in place.
 
-**Develop.** The connector exports a `register(ctx)` server entry (`./register`) that binds the host-provided `@cinatra-ai/host:github-connection` service lazily at call time. UI surfaces are exported from `./settings-page` and `./setup-page`. Run the host's lint step (`lint` script) to validate the extension before publishing.
+**Develop.** The connector exports a `register(ctx)` server entry (`./register`) that ships its own GitHub connection client and registers it as the `@cinatra-ai/host:github-connection` capability — the Cinatra core ships no GitHub client code. UI surfaces are exported from `./settings-page` and `./setup-page`. Run the host's lint step (`lint` script) to validate the extension before publishing.
 
 **Troubleshoot.** If the status badge shows "Setup required", the OAuth credentials are missing — re-enter the Client ID and Client Secret. If the badge shows "Ready to connect", the credentials are saved but no GitHub connection exists yet — complete the OAuth flow. If the repository list is empty after connecting, disconnect and reconnect GitHub, then refresh the settings page.
 
