@@ -3,6 +3,23 @@
 All notable changes to this project are documented here, derived from the
 project's merged pull request and release-tag history.
 
+## v0.1.3 — 2026-07-07
+
+Pairs with Cinatra 0.1.7, which removes the core GitHub client.
+
+- feat(connection-client): own the GitHub connection client, relocated from Cinatra core and registered under the same existing host capability id (provider flip, no contract change), persisting and authorizing through published host capabilities including the instance-connection gate (cinatra#975 W3) (#36)
+
+## v0.1.2 — 2026-07-04
+
+- feat: final connection access-scoping declaration — default scope "admin" (cinatra#954 W4) (#35)
+- fix(setup): remove the extension-rendered connection-status pill (#29)
+- fix(ui): shadcn raw-element fixes + ramp ui-gate to error (#21)
+- chore(manifest): add the declared SDK ABI range to the cinatra block (#30); add cinatra.vendor connector provenance metadata (#32)
+- chore(deps): declare cinatra.consumes for closure-gate enrollment (#33)
+- docs: expand README to the org standard (#19) (#20); CHANGELOG reconstructed from tag + merged-PR history (#34)
+- chore: strip private tracker references from public source and workflow comments (#25, #28)
+- ci: adopt source-leak-gate (#22, #23); re-vendor the ui-gate preset with the dynamic-import ban (#24); pin the release workflow to the gated reusable extension-release flow (release-approval wall) (#31)
+
 ## v0.1.1 — 2026-06-23
 
 - ci: adopt source-leak-gate (#1)
@@ -26,19 +43,4 @@ project's merged pull request and release-tag history.
 ## v0.1.0 — 2026-06-03
 
 - Initial release.
-
-## Unreleased
-
-- docs(readme): expand README to the org standard (#19) (#20)
-- fix(ui): shadcn raw-element fixes + ramp ui-gate to error (#21)
-- ci: adopt source-leak-gate (#22)
-- ci: adopt source-leak-gate (#23)
-- ci(ui-gate): re-vendor preset with Block-C (dynamic-import ban) + bump pin to v0.1.1 (#24)
-- chore: strip private engineering-tracker refs from public source (#25)
-- chore: strip private tracker references from workflow comments (#28)
-- fix(setup): remove the extension-rendered connection-status pill (#29)
-- chore(manifest): add sdkAbiRange "^2" to cinatra block (#30)
-- ci(release): pin reusable-extension-release to gated v0.1.1 (release-approval wall) (#31)
-- chore: add cinatra.vendor connector provenance metadata (#32)
-- chore(deps): declare cinatra.consumes for closure-gate enrollment (#33)
 
