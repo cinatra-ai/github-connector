@@ -19,6 +19,7 @@ import { Tabs, TabsListRow, TabsTrigger, TabsContent } from "@cinatra-ai/sdk-ui/
 // replaces the three raw in-page banner <div>s).
 import { SearchParamToast } from "@cinatra-ai/sdk-ui/search-param-toast";
 import { NangoUserConnectButton } from "@cinatra-ai/sdk-ui/nango";
+import { Plug } from "lucide-react";
 import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -175,6 +176,7 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
                     <NangoUserConnectButton
                       connectorKey="github"
                       connected={connected}
+                      leadingIcon={<Plug className="size-4" aria-hidden />}
                       reconnectConnectionId={savedConnection?.connectionId}
                       connectLabel="Connect"
                       reconnectLabel="Reconnect"
