@@ -21,6 +21,14 @@ import { z } from "zod";
 import { requireExtensionAction } from "@cinatra-ai/sdk-extensions";
 import { getGitHubDeps } from "./deps";
 
+// The connector's own public setup route (the generic connector dispatch route,
+// subroute "setup"). After a save we redirect back HERE — with the matching
+// success flag — so the standalone setup PAGE stays put and renders its own
+// ?saved / ?repoSaved banner. (Before the connector-setup-tabs conversion the
+// setup surface was a MODAL that closed back to /configuration/llm on save; that
+// off-page redirect left the page's success banners unreachable.)
+const GITHUB_SETUP_PATH = "/connectors/cinatra-ai/github-connector/setup";
+
 const githubConnectorSchema = z.object({
   clientId: z.string().optional(),
   clientSecret: z.string().optional(),
@@ -36,7 +44,7 @@ export async function saveGitHubConnectionAction(formData: FormData) {
     clientId: parsed.clientId,
     clientSecret: parsed.clientSecret,
   });
-  redirect("/configuration/llm");
+  redirect(`${GITHUB_SETUP_PATH}?saved=1`);
 }
 
 const githubRepoSelectionSchema = z.object({
@@ -52,5 +60,5 @@ export async function saveGitHubRepositorySelectionAction(formData: FormData) {
       undefined,
   });
   await getGitHubDeps().saveRepositorySelection({ repositoryFullName: parsed.repositoryFullName });
-  redirect("/configuration/llm");
+  redirect(`${GITHUB_SETUP_PATH}?repoSaved=1`);
 }
