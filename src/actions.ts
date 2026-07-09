@@ -19,7 +19,15 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireExtensionAction } from "@cinatra-ai/sdk-extensions";
+import { flashHref } from "@cinatra-ai/sdk-extensions/flash-href";
 import { getGitHubDeps } from "./deps";
+
+// Codes-only flash protocol (toast-notifications epic, cinatra-ai/cinatra#1107
+// S7): both actions redirect back to the settings page carrying `?notice=<code>`
+// / `?error=<code>`; the <SearchParamToast> island mounted in ./settings-page
+// maps each code to the static message in ./github-flash — never URL-derived
+// text.
+const SETUP_PATH = "/configuration/llm/github";
 
 const githubConnectorSchema = z.object({
   clientId: z.string().optional(),
@@ -32,11 +40,16 @@ export async function saveGitHubConnectionAction(formData: FormData) {
     clientId: formData.get("clientId") ?? undefined,
     clientSecret: formData.get("clientSecret") ?? undefined,
   });
-  await getGitHubDeps().saveOAuthSettings({
-    clientId: parsed.clientId,
-    clientSecret: parsed.clientSecret,
-  });
-  redirect("/configuration/llm");
+  try {
+    await getGitHubDeps().saveOAuthSettings({
+      clientId: parsed.clientId,
+      clientSecret: parsed.clientSecret,
+    });
+  } catch (e) {
+    console.error("[saveGitHubConnectionAction] saveOAuthSettings failed:", e);
+    redirect(flashHref(SETUP_PATH, { error: "oauth-save-failed" }));
+  }
+  redirect(flashHref(SETUP_PATH, { notice: "saved" }));
 }
 
 const githubRepoSelectionSchema = z.object({
@@ -51,6 +64,11 @@ export async function saveGitHubRepositorySelectionAction(formData: FormData) {
       (formData.get("repository") as string | null) ??
       undefined,
   });
-  await getGitHubDeps().saveRepositorySelection({ repositoryFullName: parsed.repositoryFullName });
-  redirect("/configuration/llm");
+  try {
+    await getGitHubDeps().saveRepositorySelection({ repositoryFullName: parsed.repositoryFullName });
+  } catch (e) {
+    console.error("[saveGitHubRepositorySelectionAction] saveRepositorySelection failed:", e);
+    redirect(flashHref(SETUP_PATH, { error: "repo-save-failed" }));
+  }
+  redirect(flashHref(SETUP_PATH, { notice: "repo-saved" }));
 }

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ConnectorSettingsDialog } from "@cinatra-ai/sdk-ui";
+import { SearchParamToast } from "@cinatra-ai/sdk-ui/search-param-toast";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
@@ -7,6 +9,7 @@ import { Select } from "./components/ui/select";
 import { NangoManagedApiCard, NangoUserConnectButton } from "@cinatra-ai/sdk-ui/nango";
 import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
 import { saveGitHubConnectionAction, saveGitHubRepositorySelectionAction } from "./actions";
+import { GITHUB_FLASH_TOASTS } from "./github-flash";
 // hostInternal pinned-empty sweep (cinatra#172 Stage H4): status/settings/
 // repository reads resolve the host-bound deps slot (bound at serverEntry
 // activation by `register(ctx)` adapting `@cinatra-ai/host:github-connection`)
@@ -23,20 +26,18 @@ type GitHubSettingsPageProps = {
   ctx: ExtensionHostContext;
 };
 
-function pickSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPageProps) {
-  const [settings, status, resolvedSearchParams] = await Promise.all([
+  const [settings, status] = await Promise.all([
     getGitHubDeps().getOAuthSettings(),
     getGitHubDeps().getStatus(),
+    // searchParams is still accepted (host dispatch passes it in), but the flash
+    // outcomes (`?notice=<code>` / `?error=<code>`) are no longer read
+    // server-side for banner rendering — the <SearchParamToast> island below
+    // owns them client-side (one-shot toast + param strip). Awaited here only
+    // to preserve prop consumption for any future non-flash search params.
     (searchParams ?? Promise.resolve({})) as Promise<Record<string, string | string[] | undefined>>,
   ]);
 
-  const errorMessage = pickSearchParam(resolvedSearchParams.error);
-  const saved = pickSearchParam(resolvedSearchParams.saved) === "1";
-  const repoSaved = pickSearchParam(resolvedSearchParams.repoSaved) === "1";
   // Nango render data via the host-injected `ctx.nango` port (optional getters,
   // null-safe — degrade to "not configured" if a host pinned to an older minor
   // doesn't implement them).
@@ -51,6 +52,10 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
 
   return (
     <ConnectorSettingsDialog closeHref="/configuration/llm">
+          <Suspense fallback={null}>
+            <SearchParamToast toasts={GITHUB_FLASH_TOASTS} />
+          </Suspense>
+
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">API setup</p>
@@ -78,22 +83,6 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
               </Link>
             </div>
           </div>
-
-          {errorMessage ? (
-            <div className="mt-5 rounded-control border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{errorMessage}</div>
-          ) : null}
-
-          {saved ? (
-            <div className="mt-5 rounded-control border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-              GitHub OAuth administration saved.
-            </div>
-          ) : null}
-
-          {repoSaved ? (
-            <div className="mt-5 rounded-control border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-              GitHub repository saved and cloned into the local data folder.
-            </div>
-          ) : null}
 
           <div className="mt-6">
             <h3 className="text-lg font-semibold text-foreground">GitHub OAuth administration</h3>
