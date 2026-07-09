@@ -4,7 +4,12 @@ import { Main, PageHeader, PageContent } from "@cinatra-ai/sdk-ui";
 // subpath (NOT the `/marketplace` barrel — that would pull it onto every app
 // route's reachable-module graph). Model B (bundled-react) connector setup
 // pages consume it directly for their Setup / … / always-last Help tabs.
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@cinatra-ai/sdk-ui/tabs";
+// `TabsListRow` (not the bare `TabsList`) is the under-header row: it draws the
+// design-system etched paired-line rule to the RIGHT of the last tab out to the
+// column edge and drops its own bottom hairline; pair it with a header rendered
+// `divider={false}` so the two rules never stack (app-connectors §II ·
+// app.html Components · Tabs).
+import { Tabs, TabsListRow, TabsTrigger, TabsContent } from "@cinatra-ai/sdk-ui/tabs";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
@@ -61,16 +66,25 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
     // reserved, always-last Help tab (app-connectors.html §II): adding the Help
     // tab is what introduces the tablist.
     <Main className="min-h-screen">
-      <PageHeader title="GitHub" description="Connector setup" />
-      <PageContent className="flex flex-col gap-6 pb-8">
-        <Tabs defaultValue="setup" className="w-full max-w-3xl">
-          <TabsList aria-label="GitHub connector setup">
+      {/* Header + tablist hold to the Wide column (max-w-3xl · 768px, §VII
+          Content widths), centered in the stage. `divider={false}` because the
+          section rule is drawn by TabsListRow to the right of the last tab —
+          never stack a header rule above a tab rule (§II). */}
+      <PageHeader title="GitHub" description="Connector setup" divider={false} className="max-w-3xl" />
+      <PageContent className="flex max-w-3xl flex-col gap-6 pb-8">
+        <Tabs defaultValue="setup" className="w-full">
+          <TabsListRow aria-label="GitHub connector setup">
             <TabsTrigger value="setup">Setup</TabsTrigger>
             {/* Help is RESERVED and ALWAYS LAST (§II). */}
             <TabsTrigger value="help">Help</TabsTrigger>
-          </TabsList>
+          </TabsListRow>
 
-          <TabsContent value="setup" className="mt-6 flex flex-col gap-10">
+          {/* forceMount + our own `data-[state=inactive]:hidden` keeps the Setup
+              form mounted while the user reads Help, so partially-typed OAuth
+              credentials are never dropped on a tab switch (the schema-config
+              connector-form pattern). Help is read-only prose, mounted the same
+              way for parity. */}
+          <TabsContent value="setup" forceMount className="mt-6 flex flex-col gap-10 data-[state=inactive]:hidden">
             {errorMessage ? (
               <div className="rounded-control border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{errorMessage}</div>
             ) : null}
@@ -234,7 +248,7 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
           {/* Help — reserved, always LAST, read-only (no form, no Save): the
               setup how-to (prerequisites, callback URL, scopes, steps) narrowed
               to the §II Narrow content width. */}
-          <TabsContent value="help" className="mt-6 flex max-w-xl flex-col gap-8 text-sm leading-6 text-muted-foreground">
+          <TabsContent value="help" forceMount className="mt-6 flex max-w-xl flex-col gap-8 text-sm leading-6 text-muted-foreground data-[state=inactive]:hidden">
             <section>
               <h3 className="text-base font-semibold text-foreground">About the GitHub connector</h3>
               <p className="mt-2">
