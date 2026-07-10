@@ -92,6 +92,11 @@ export interface GitHubConnectorDeps {
   /** WRITER — persist the repository selection (host-side validated; throws
    * on an unknown repository). Manage-gated at the calling action, as above. */
   saveRepositorySelection: (input: { repositoryFullName?: string }) => Promise<unknown>;
+  /** WRITER — disconnect the GitHub connection: delete the OAuth connection at
+   * Nango, drop the saved-connection record, and clear the repository binding.
+   * Idempotent (no-op with no saved connection). Manage-gated at the calling
+   * action, as above. */
+  disconnect: (input?: { connectionId?: string }) => Promise<void>;
 }
 
 const GITHUB_DEPS_KEY = Symbol.for("@cinatra-ai/github-connector:host-deps/v1");

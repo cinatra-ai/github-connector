@@ -1,244 +1,292 @@
 import Link from "next/link";
-import { ConnectorSettingsDialog } from "@cinatra-ai/sdk-ui";
+// The connector setup PAGE shell — renders the page header AND content in the
+// SAME centered Wide column (max-w-3xl · 768px), so the header's left edge
+// aligns with the content frame (app-connectors.html §II; cinatra-ai/cinatra
+// #1247). It replaces the hand-rolled Main + PageHeader + PageContent.
+import { ConnectorSetupPage } from "@cinatra-ai/sdk-ui/connector-setup-page";
+// The shared two-column setup body — minmax(0,1fr) 236px, gap 30, align-start;
+// wider left = configuration fields, narrower right = the Connection status
+// card; collapses to one column on a narrow viewport (§II · #1254).
+import { ConnectorSetupColumns } from "@cinatra-ai/sdk-ui/connector-setup-columns";
+// The design-system-strict underline Tabs primitive ships from its OWN subpath.
+// TabsListRow (not the bare TabsList) draws the etched paired-line section rule
+// to the RIGHT of the last tab out to the column edge and drops its own bottom
+// hairline; paired with a header rendered `divider={false}` (via the shell) so
+// the header rule and the tab rule never stack (§II · #1242).
+import { Tabs, TabsListRow, TabsTrigger, TabsContent } from "@cinatra-ai/sdk-ui/tabs";
+// One-shot URL flash-message island — maps the redirect outcome CODE to a
+// STATIC message (./github-flash), never URL text (toast-notifications epic;
+// replaces the three raw in-page banner <div>s).
+import { SearchParamToast } from "@cinatra-ai/sdk-ui/search-param-toast";
+import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 import { Select } from "./components/ui/select";
-import { NangoManagedApiCard, NangoUserConnectButton } from "@cinatra-ai/sdk-ui/nango";
-import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
-import { saveGitHubConnectionAction, saveGitHubRepositorySelectionAction } from "./actions";
+import { GITHUB_FLASH_TOASTS } from "./github-flash";
+import { ConnectGitHubButton, ConnectionStatusPanel, DisconnectAction } from "./setup-client";
+import {
+  checkGitHubStatusAction,
+  disconnectGitHubConnectionAction,
+  saveGitHubOAuthSettingsForConnect,
+  saveGitHubRepositorySelectionAction,
+} from "./actions";
 // hostInternal pinned-empty sweep (cinatra#172 Stage H4): status/settings/
 // repository reads resolve the host-bound deps slot (bound at serverEntry
-// activation by `register(ctx)` adapting `@cinatra-ai/host:github-connection`)
-// instead of importing `@/lib/github-api`. The render keeps its grant-aware
-// `ctx` prop for the Nango port reads below — deps slot and ctx prop coexist
-// by design (actions CANNOT close over ctx; render-time reads may use either).
+// activation by `register(ctx)`) instead of importing `@/lib/github-api`. The
+// render keeps its grant-aware `ctx` prop for the Nango port reads below.
 import { getGitHubDeps } from "./deps";
 
 type GitHubSettingsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
-  // Host-injected ports (SDK-only decouple). Nango render data flows
-  // through `ctx.nango.*` (the SDK port) instead of importing the nango-connector
-  // extension — the dispatch route + the plugins-registry mount both build ctx.
+  // Host-injected ports (SDK-only decouple). Nango render data flows through
+  // `ctx.nango.*` (the SDK port); the dispatch route + the plugins-registry
+  // mount both build ctx.
   ctx: ExtensionHostContext;
 };
 
-function pickSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPageProps) {
-  const [settings, status, resolvedSearchParams] = await Promise.all([
-    getGitHubDeps().getOAuthSettings(),
-    getGitHubDeps().getStatus(),
-    (searchParams ?? Promise.resolve({})) as Promise<Record<string, string | string[] | undefined>>,
-  ]);
+  const resolvedSearchParams = (await (searchParams ?? Promise.resolve({}))) as Record<
+    string,
+    string | string[] | undefined
+  >;
+  void resolvedSearchParams; // outcome codes are consumed by <SearchParamToast>
 
-  const errorMessage = pickSearchParam(resolvedSearchParams.error);
-  const saved = pickSearchParam(resolvedSearchParams.saved) === "1";
-  const repoSaved = pickSearchParam(resolvedSearchParams.repoSaved) === "1";
-  // Nango render data via the host-injected `ctx.nango` port (optional getters,
-  // null-safe — degrade to "not configured" if a host pinned to an older minor
-  // doesn't implement them).
-  const nangoFrontendConfig = (await ctx.nango.getFrontendConfig?.()) ?? {};
-  const connectionServiceReady = ((await ctx.nango.getStatus?.())?.status ?? "not_connected") === "connected";
-  const savedConnection = (await ctx.nango.getPrimarySavedConnection?.("github")) ?? null;
-  const settingsConfigured = Boolean(settings.clientId && settings.clientSecret);
-  const repositories =
-    savedConnection
-      ? await getGitHubDeps().listRepositories().catch(() => [])
-      : [];
+  // All data-fetching in one guarded block so the Setup body can render its
+  // `error` state (§II item 9) instead of throwing the whole route.
+  let loadError = false;
+  let settings: Awaited<ReturnType<ReturnType<typeof getGitHubDeps>["getOAuthSettings"]>> | null = null;
+  let connected = false;
+  let savedConnection: { connectionId: string } | null = null;
+  let nangoFrontendConfig: Record<string, unknown> = {};
+  let repositories: Awaited<ReturnType<ReturnType<typeof getGitHubDeps>["listRepositories"]>> = [];
+
+  try {
+    const [loadedSettings, status] = await Promise.all([
+      getGitHubDeps().getOAuthSettings(),
+      getGitHubDeps().getStatus(),
+    ]);
+    settings = loadedSettings;
+    connected = status.status === "connected";
+    // Nango render data via the host-injected `ctx.nango` port (optional
+    // getters, null-safe — degrade if a host pinned to an older minor omits them).
+    nangoFrontendConfig = (await ctx.nango.getFrontendConfig?.()) ?? {};
+    savedConnection = (await ctx.nango.getPrimarySavedConnection?.("github")) ?? null;
+    repositories = savedConnection ? await getGitHubDeps().listRepositories().catch(() => []) : [];
+  } catch {
+    loadError = true;
+  }
+
+  const callbackUrl = settings?.redirectUri ?? "Available once the connector is configured.";
+  const scopes = settings?.scopes ?? [];
 
   return (
-    <ConnectorSettingsDialog closeHref="/configuration/llm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">API setup</p>
-              <h2 className="text-2xl font-semibold tracking-tight">GitHub API</h2>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Configure the GitHub OAuth app Cinatra uses with Nango, then connect GitHub access for the repository Cinatra should read from and write to.
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              {/* The connection-status badge is HOST-injected on the connector
-                  setup-page dispatch route — the same badge the /connectors card
-                  shows — so the extension no longer renders its own status pill
-                  here (it would duplicate the host badge). The title + form stay
-                  extension-owned, and `status.status` still drives the per-card
-                  badge + the saved-connection affordances below. */}
-              <Link
-                href="/configuration/llm"
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-line text-muted-foreground transition hover:bg-surface-muted hover:text-foreground"
-                aria-label="Close"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4.5 w-4.5">
-                  <path d="M6 6 18 18" />
-                  <path d="M18 6 6 18" />
-                </svg>
-              </Link>
-            </div>
-          </div>
+    // Standard connector-setup PAGE chrome (no modal). The status badge that
+    // once sat top-right of the header now lives in the Connection status card
+    // (§II item 2), so the header carries no badge / actions. `divider={false}`
+    // — the section rule is the tab row's etched rule (§II item 4).
+    <ConnectorSetupPage
+      title="GitHub"
+      description="Connector setup"
+      divider={false}
+      className="flex flex-col gap-6 pb-8"
+    >
+      {/* Banner → toast migration (issue #39): the three legacy in-page banner
+          <div>s are gone; outcome codes toast via the static message map. */}
+      <SearchParamToast toasts={GITHUB_FLASH_TOASTS} />
 
-          {errorMessage ? (
-            <div className="mt-5 rounded-control border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{errorMessage}</div>
-          ) : null}
+      <Tabs defaultValue="setup" className="w-full">
+        <TabsListRow aria-label="GitHub connector setup">
+          <TabsTrigger value="setup">Setup</TabsTrigger>
+          {/* Help is RESERVED and ALWAYS LAST (§II items 30–31); for this
+              single-connection connector the Help tab is what introduces the
+              tablist (§II item 25/31). */}
+          <TabsTrigger value="help">Help</TabsTrigger>
+        </TabsListRow>
 
-          {saved ? (
-            <div className="mt-5 rounded-control border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-              GitHub OAuth administration saved.
-            </div>
-          ) : null}
-
-          {repoSaved ? (
-            <div className="mt-5 rounded-control border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-              GitHub repository saved and cloned into the local data folder.
-            </div>
-          ) : null}
-
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold text-foreground">GitHub OAuth administration</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Save the GitHub OAuth app credentials that Nango should use. Cinatra requests the GitHub permissions it needs to read from and write to the repository you will choose during connection, plus profile and email access for connection metadata.
-            </p>
-          </div>
-
-          <form action={saveGitHubConnectionAction} className="mt-6 grid gap-4 sm:grid-cols-2">
-            <Input type="hidden" name="redirectTo" value="/configuration/llm/github" />
-            <Label className="grid gap-2">
-              Client ID
-              <Input
-                name="clientId"
-                defaultValue={settings.clientId ?? ""}
-              />
-            </Label>
-            <Label className="grid gap-2">
-              Client secret
-              <Input
-                name="clientSecret"
-                type="password"
-                defaultValue={settings.clientSecret ?? ""}
-              />
-            </Label>
-            <div className="rounded-control border border-line bg-surface-muted px-4 py-4 text-sm text-muted-foreground sm:col-span-2">
-              <p className="font-medium text-foreground">Callback URL</p>
-              <p className="mt-2 break-all">{settings.redirectUri}</p>
-            </div>
-            <div className="rounded-control border border-line bg-surface-muted px-4 py-4 text-sm text-muted-foreground sm:col-span-2">
-              <p className="font-medium text-foreground">Scopes requested</p>
-              <p className="mt-2">{settings.scopes.join(", ")}</p>
-            </div>
-            <div className="sm:col-span-2 flex flex-wrap gap-3">
-              <Button type="submit">Save GitHub administration</Button>
-            </div>
-          </form>
-
-          <div className="mt-10">
-            <h3 className="text-lg font-semibold text-foreground">GitHub repository connection</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              After saving the OAuth app values, connect GitHub first. Once the connection is active, choose the repository Cinatra should use. The skills package will use this connection through Octokit when it reads and updates `SKILL.md` files and related repo content.
-            </p>
-          </div>
-
-          <div className="mt-6">
-            <NangoManagedApiCard
-              connectorKey="github"
-              title="GitHub API"
-              description="Connect GitHub and select the repository Cinatra should use for skill package file management."
-              badge={
-                status.status === "connected"
-                  ? "Connected"
-                  : settingsConfigured
-                    ? "Ready to connect"
-                    : "Setup required"
-              }
-              badgeTone={
-                status.status === "connected"
-                  ? "connected"
-                  : settingsConfigured
-                    ? "warning"
-                    : "neutral"
-              }
-              detail={status.detail}
-              isConnected={status.status === "connected"}
-              usesConnectUI={settingsConfigured && !savedConnection}
-              reconnectConnectionId={savedConnection?.connectionId}
-              nangoFrontendConfig={nangoFrontendConfig}
-              connectionServiceReady={connectionServiceReady}
-            />
-          </div>
-
-          {savedConnection ? (
-            <div className="mt-6 rounded-panel border border-line bg-surface px-5 py-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h4 className="text-base font-semibold text-foreground">Selected repository</h4>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                    Choose the GitHub repository Cinatra should manage with this connection.
-                  </p>
+        {/* forceMount + `data-[state=inactive]:hidden` keeps the Setup form
+            mounted while the user reads Help, so partially-typed OAuth
+            credentials survive a tab switch (the schema-config form pattern). */}
+        <TabsContent value="setup" forceMount className="mt-6 data-[state=inactive]:hidden">
+          <ConnectorSetupColumns
+            conformanceId="connector-setup"
+            state={loadError ? "error" : "ready"}
+            fields={
+              loadError ? (
+                <div className="rounded-[7px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  Could not load the GitHub connection settings. Refresh the page to try again.
                 </div>
-                {status.selectedRepositoryFullName ? (
-                  <span className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs uppercase text-success">
-                    {status.selectedRepositoryFullName}
-                  </span>
-                ) : (
-                  <span className="rounded-full border border-warning/30 bg-warning/10 px-3 py-1 text-xs uppercase text-warning">
-                    Repository required
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <NangoUserConnectButton
-                  connectorKey="github"
-                  reconnectConnectionId={savedConnection.connectionId}
-                  connected
-                  reconnectLabel="Connect GitHub again"
-                  nangoFrontendConfig={nangoFrontendConfig}
-                  className="rounded-control border border-line bg-surface-strong px-5 py-3 text-sm font-semibold text-foreground transition hover:bg-surface-muted"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Use this only if you want to switch the underlying GitHub account. Your repository selection can be changed below without reconnecting.
-                </p>
-              </div>
-
-              {repositories.length > 0 ? (
-                <form action={saveGitHubRepositorySelectionAction} className="mt-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <Input type="hidden" name="redirectTo" value="/configuration/llm/github" />
-                  <Label className="grid gap-2">
-                    Repository
-                    <Select
-                      name="repositoryFullName"
-                      defaultValue={settings.selectedRepositoryFullName ?? ""}
-                      className="rounded-control border border-line bg-surface-strong px-4 py-3"
-                    >
-                      <option value="">Choose a repository</option>
-                      {repositories.map((repository) => (
-                        <option key={repository.id} value={repository.fullName}>
-                          {repository.fullName} ({repository.visibility})
-                        </option>
-                      ))}
-                    </Select>
-                  </Label>
-                  <div className="flex items-end">
-                    <Button type="submit">Save repository</Button>
-                  </div>
-                </form>
               ) : (
-                <div className="mt-6 rounded-control border border-dashed border-line bg-surface-muted px-4 py-4 text-sm text-muted-foreground">
-                  No repositories were returned for the current GitHub connection yet. Reconnect GitHub if needed and then refresh this page.
-                </div>
-              )}
+                <div className="flex flex-col gap-6">
+                  {/* Configuration fields — stacked, single-column (§II item 6).
+                      Pure-white inputs with the navy hairline border (Input:
+                      bg-surface-strong + border-input, radius 7). Each field
+                      keeps its own helper text. This is a field GROUP, not a
+                      self-submitting form: the standalone "Save GitHub
+                      administration" button was removed per the owner review on
+                      PR #45 — the Connect button below persists these
+                      credentials (reading them by `id`) before it connects. */}
+                  <form id="github-oauth-form" className="flex flex-col gap-4">
+                    <Label className="grid gap-1.5 text-sm font-medium text-foreground">
+                      Client ID
+                      <Input name="clientId" defaultValue={settings?.clientId ?? ""} autoComplete="off" />
+                      <span className="text-xs font-normal text-muted-foreground">
+                        The GitHub OAuth app&apos;s Client ID. Leave blank to keep the current saved value.
+                      </span>
+                    </Label>
+                    <Label className="grid gap-1.5 text-sm font-medium text-foreground">
+                      Client secret
+                      <Input name="clientSecret" type="password" defaultValue={settings?.clientSecret ?? ""} autoComplete="off" />
+                      <span className="text-xs font-normal text-muted-foreground">
+                        The OAuth app&apos;s Client secret. Leave blank to keep the current saved value.
+                      </span>
+                    </Label>
 
-              {settings.selectedRepositoryUrl ? (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  Current repository:{" "}
-                  <Link href={settings.selectedRepositoryUrl} className="underline underline-offset-4">
-                    {settings.selectedRepositoryFullName}
-                  </Link>
-                </p>
-              ) : null}
+                    <div className="grid gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Callback URL</span>
+                      <p className="rounded-[7px] border border-line bg-surface-muted px-3 py-2 font-mono text-xs break-all text-foreground">
+                        {callbackUrl}
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Register this exact URL as the OAuth app&apos;s authorization callback URL.
+                      </span>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                      <span className="text-sm font-medium text-foreground">Scopes requested</span>
+                      <p className="rounded-[7px] border border-line bg-surface-muted px-3 py-2 font-mono text-xs text-foreground">
+                        {scopes.length > 0 ? scopes.join(", ") : "Available once the connector is configured."}
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        The GitHub permissions Cinatra requests for the connection.
+                      </span>
+                    </div>
+
+                  </form>
+
+                  {/* Actions — side by side, never stacked (§II item 7):
+                      Connect (indigo primary) always available (item 8), and
+                      Disconnect (destructive, unplug) disabled until connected.
+                      Connect persists the OAuth-app credentials above (the save
+                      folded in from the removed button, PR #45) and then runs
+                      the shared Nango OAuth trigger. */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <ConnectGitHubButton
+                      connectorKey="github"
+                      connected={connected}
+                      reconnectConnectionId={savedConnection?.connectionId}
+                      formId="github-oauth-form"
+                      nangoFrontendConfig={nangoFrontendConfig}
+                      saveOAuthAction={saveGitHubOAuthSettingsForConnect}
+                    />
+                    <DisconnectAction connected={connected} disconnectAction={disconnectGitHubConnectionAction} />
+                  </div>
+
+                  {/* Repository selection — GitHub-specific configuration that
+                      only applies once a connection exists (single-column,
+                      stacked; part of the Setup config, not a separate tab). */}
+                  {connected && savedConnection ? (
+                    repositories.length > 0 ? (
+                      <form action={saveGitHubRepositorySelectionAction} className="flex flex-col gap-2">
+                        <Label className="grid gap-1.5 text-sm font-medium text-foreground">
+                          Repository
+                          <Select name="repositoryFullName" defaultValue={settings?.selectedRepositoryFullName ?? ""}>
+                            <option value="">Choose a repository</option>
+                            {repositories.map((repository) => (
+                              <option key={repository.id} value={repository.fullName}>
+                                {repository.fullName} ({repository.visibility})
+                              </option>
+                            ))}
+                          </Select>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            The GitHub repository Cinatra reads from and writes to.
+                          </span>
+                        </Label>
+                        <div>
+                          <Button type="submit">Save repository</Button>
+                        </div>
+                        {settings?.selectedRepositoryUrl ? (
+                          <p className="text-xs text-muted-foreground">
+                            Current:{" "}
+                            <Link href={settings.selectedRepositoryUrl} className="underline underline-offset-4">
+                              {settings.selectedRepositoryFullName}
+                            </Link>
+                          </p>
+                        ) : null}
+                      </form>
+                    ) : (
+                      <div className="rounded-[7px] border border-dashed border-line bg-surface-muted px-3 py-2 text-xs text-muted-foreground">
+                        No repositories are reachable through the current GitHub connection yet. Reconnect GitHub if needed, then refresh.
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              )
+            }
+            aside={
+              /* Connection status card (§II items 10–14): heading over a
+                 divider, a status badge with icon + label, and a full-width
+                 Check action beneath it. Pressing Check swaps in the transient
+                 "Checking…" badge until the re-probe resolves. */
+              <ConnectionStatusPanel initialConnected={connected} checkAction={checkGitHubStatusAction} />
+            }
+          />
+        </TabsContent>
+
+        {/* Help — reserved, always LAST, read-only (no form, no Save): the
+            setup how-to narrowed to the §II Narrow content width (max-w-xl ·
+            576px), flush-left beneath the tabs (§II items 26, 29–30). */}
+        <TabsContent
+          value="help"
+          forceMount
+          className="mt-6 flex max-w-xl flex-col gap-8 text-sm leading-6 text-muted-foreground data-[state=inactive]:hidden"
+        >
+          <section>
+            <h3 className="text-base font-semibold text-foreground">About the GitHub connector</h3>
+            <p className="mt-2">
+              Cinatra uses a GitHub connection to read from and write to a single repository. The skills package uses this connection through Octokit when it reads and updates{" "}
+              <code className="rounded bg-surface-muted px-1 py-0.5 font-mono text-xs">SKILL.md</code> files and related repository content.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-foreground">Before you start</h3>
+            <p className="mt-2">
+              You need a GitHub OAuth app. Create one under GitHub → Settings → Developer settings → OAuth Apps, or go straight to{" "}
+              <Link
+                href="https://github.com/settings/developers"
+                className="font-medium text-foreground underline underline-offset-4"
+              >
+                github.com/settings/developers
+              </Link>
+              . When creating the OAuth app, register this callback URL so GitHub can return the authorization to Cinatra:
+            </p>
+            <div className="mt-3 rounded-[7px] border border-line bg-surface-muted px-4 py-3">
+              <p className="font-mono text-xs break-all text-foreground">{callbackUrl}</p>
             </div>
-          ) : null}
-    </ConnectorSettingsDialog>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-foreground">Permissions requested</h3>
+            <p className="mt-2">
+              Cinatra requests the GitHub permissions it needs to read from and write to the repository you choose, plus profile and email access for connection metadata:
+            </p>
+            <p className="mt-3 font-mono text-xs text-foreground">
+              {scopes.length > 0 ? scopes.join(", ") : "Available once the connector is configured."}
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-base font-semibold text-foreground">Steps</h3>
+            <ol className="mt-2 list-decimal space-y-2 pl-5">
+              <li>On the <span className="font-medium text-foreground">Setup</span> tab, paste the OAuth app&apos;s Client ID and Client secret.</li>
+              <li>Press <span className="font-medium text-foreground">Connect</span> — Cinatra saves those credentials and sends you to GitHub to authorize the app.</li>
+              <li>Once the connection is active, choose the repository Cinatra should manage.</li>
+              <li>Use <span className="font-medium text-foreground">Disconnect</span> to remove the connection; the connector stops working until you connect again.</li>
+            </ol>
+          </section>
+        </TabsContent>
+      </Tabs>
+    </ConnectorSetupPage>
   );
 }

@@ -44,6 +44,7 @@ type HostGitHubConnectionShape = {
   listRepositories: GitHubConnectorDeps["listRepositories"];
   saveOAuthSettings: GitHubConnectorDeps["saveOAuthSettings"];
   saveRepositorySelection: GitHubConnectorDeps["saveRepositorySelection"];
+  disconnect: GitHubConnectorDeps["disconnect"];
 };
 
 /** Lazy per-concern host-service resolution (fail-loud on a missing service —
@@ -74,6 +75,7 @@ function buildHostBoundDeps(ctx: ExtensionHostContext): GitHubConnectorDeps {
     // shared in-process capability id; gating stays here, extension-side).
     saveOAuthSettings: (input) => github().saveOAuthSettings(input),
     saveRepositorySelection: (input) => github().saveRepositorySelection(input),
+    disconnect: (input) => github().disconnect(input),
   };
 }
 
@@ -134,6 +136,10 @@ export function register(ctx: ExtensionHostContext): void {
       getAccessTokenForAuthorizedConnection: (input: { connectionId: string }) =>
         client.getAccessTokenForAuthorizedConnection(input),
       savePersonalAccessToken: (pat: string | null) => client.savePersonalAccessToken(pat),
+      // Disconnect the GitHub connection (delete at Nango + drop the saved
+      // record + clear the repository binding). Reached only through the
+      // settings page's manage-gated "use server" action.
+      disconnect: (input?: { connectionId?: string }) => client.disconnect(input),
     },
   });
 }

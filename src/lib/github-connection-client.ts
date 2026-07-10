@@ -126,6 +126,10 @@ type NangoSystemShape = Pick<
   | "ensureNangoIntegration"
   | "getNangoConnection"
   | "getNangoOAuth2IntegrationCredentials"
+  // disconnect path (connector setup page Disconnect action): delete the OAuth
+  // connection at Nango, then drop the persisted saved-connection record.
+  | "deleteNangoConnection"
+  | "removeNangoConnectionRecord"
   | "providerConfigKeys"
 >;
 
@@ -185,6 +189,17 @@ export type GitHubConnectionClient = {
   /** WRITER — persist (or clear, on null/blank) the personal-access-token
    * fallback for the host's skills-configuration surface. */
   savePersonalAccessToken(pat: string | null): void;
+  /** WRITER — disconnect the GitHub connection: delete the OAuth connection at
+   * Nango (tolerating an already-deleted connection), drop the persisted
+   * saved-connection record, and clear BOTH the stored repository selection and
+   * the stored personal-access-token fallback (a disconnect must leave no
+   * credential behind — `getAccessToken` falls back to the PAT). Idempotent /
+   * retry-safe — a no-op when there is no saved connection. The OAuth-app admin
+   * credentials (client id/secret, held by the Nango integration, not this
+   * store) are intentionally KEPT so a later reconnect does not require
+   * re-entering them; the connector "stops working until you connect it again"
+   * (spec §II disconnect copy). */
+  disconnect(input?: { connectionId?: string }): Promise<void>;
 };
 
 /** Build the connector-owned GitHub connection client. Construction does NO
@@ -586,6 +601,37 @@ export function createGitHubConnectionClient(ctx: ExtensionHostContext): GitHubC
     return selectedRepository;
   }
 
+  async function disconnect(input?: { connectionId?: string }): Promise<void> {
+    const savedConnection = resolveSavedGitHubConnection(input?.connectionId);
+    if (savedConnection) {
+      // Delete at Nango FIRST (the authoritative credential scrub), then drop
+      // the local record. TOLERATE a Nango delete failure (e.g. the connection
+      // was already removed / not found): we still remove the local record, so
+      // a partial-failure retry — remote gone, record left — can always clear
+      // the stale record. The disconnect is idempotent (retry-safe).
+      try {
+        await nango().deleteNangoConnection(githubProviderConfigKey(), savedConnection.connectionId);
+      } catch {
+        // Proceed to drop the local record regardless — never wedge a
+        // disconnected connector in a "still shows a saved connection" state.
+      }
+      await nango().removeNangoConnectionRecord("github", savedConnection.connectionId);
+    }
+    // Clear the repository binding AND the stored personal-access-token
+    // fallback: a disconnect must leave NO credential behind. `getAccessToken`
+    // falls back to the stored PAT, so keeping it would let the connector keep
+    // authenticating after "Disconnect". The OAuth-app client id/secret live in
+    // the Nango integration (not this store) and are intentionally kept so a
+    // later reconnect does not require re-entering them.
+    const current = readStoredSettings();
+    writeStoredSettings({
+      redirectUri: current.redirectUri,
+      personalAccessToken: undefined,
+      selectedRepositoryFullName: undefined,
+      selectedRepositoryUrl: undefined,
+    });
+  }
+
   return {
     getStatus,
     getOAuthSettings,
@@ -595,5 +641,6 @@ export function createGitHubConnectionClient(ctx: ExtensionHostContext): GitHubC
     getAccessToken,
     getAccessTokenForAuthorizedConnection,
     savePersonalAccessToken,
+    disconnect,
   };
 }
