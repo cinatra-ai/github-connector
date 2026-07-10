@@ -51,26 +51,40 @@ const githubConnectorSchema = z.object({
   clientSecret: z.string().optional(),
 });
 
-export async function saveGitHubConnectionAction(formData: FormData) {
+// Persist the OAuth-app credentials (Client ID / Client secret) as part of the
+// Connect/Reconnect flow. The standalone "Save GitHub administration" button was
+// removed per the owner review on PR #45 — its persistence is now WIRED INTO the
+// Connect button: the setup client island calls this first and only launches the
+// Nango connect when it returns { ok: true }. The manage gate, the zod parse,
+// and the exact `saveOAuthSettings` write are carried over UNCHANGED from the
+// removed action (the "equivalent save" the review asked for). Unlike that
+// redirecting action it RETURNS an outcome — never redirects — so the client can
+// abort the connect (and surface the error inline) instead of navigating away
+// mid-flow.
+export async function saveGitHubOAuthSettingsForConnect(input: {
+  clientId?: string;
+  clientSecret?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireExtensionAction(PACKAGE_NAME, "manage");
+  // The auth gate and zod parse must still THROW (fail-closed on an unauthorized
+  // caller / malformed payload); only the WRITER degrades to a returned error.
   const parsed = githubConnectorSchema.parse({
-    clientId: formData.get("clientId") ?? undefined,
-    clientSecret: formData.get("clientSecret") ?? undefined,
+    clientId: input.clientId ?? undefined,
+    clientSecret: input.clientSecret ?? undefined,
   });
-  // Only the WRITER is guarded — the auth gate and zod parse must still throw
-  // (fail-closed on an unauthorized caller / malformed payload); a write
-  // failure degrades to a friendly error toast instead of an unhandled 500.
-  let ok = true;
   try {
     await getGitHubDeps().saveOAuthSettings({
       clientId: parsed.clientId,
       clientSecret: parsed.clientSecret,
     });
   } catch {
-    ok = false;
+    return {
+      ok: false,
+      error:
+        "Could not save the GitHub OAuth app credentials. Check the Client ID and Client secret and try again.",
+    };
   }
-  // redirect() throws NEXT_REDIRECT — it MUST live outside the try above.
-  redirect(ok ? noticeUrl("saved") : errorUrl("oauth-save-failed"));
+  return { ok: true };
 }
 
 const githubRepoSelectionSchema = z.object({

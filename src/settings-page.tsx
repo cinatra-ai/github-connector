@@ -18,19 +18,17 @@ import { Tabs, TabsListRow, TabsTrigger, TabsContent } from "@cinatra-ai/sdk-ui/
 // STATIC message (./github-flash), never URL text (toast-notifications epic;
 // replaces the three raw in-page banner <div>s).
 import { SearchParamToast } from "@cinatra-ai/sdk-ui/search-param-toast";
-import { NangoUserConnectButton } from "@cinatra-ai/sdk-ui/nango";
-import { Plug } from "lucide-react";
 import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 import { Select } from "./components/ui/select";
 import { GITHUB_FLASH_TOASTS } from "./github-flash";
-import { ConnectionStatusPanel, DisconnectAction } from "./setup-client";
+import { ConnectGitHubButton, ConnectionStatusPanel, DisconnectAction } from "./setup-client";
 import {
   checkGitHubStatusAction,
   disconnectGitHubConnectionAction,
-  saveGitHubConnectionAction,
+  saveGitHubOAuthSettingsForConnect,
   saveGitHubRepositorySelectionAction,
 } from "./actions";
 // hostInternal pinned-empty sweep (cinatra#172 Stage H4): status/settings/
@@ -59,7 +57,6 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
   let loadError = false;
   let settings: Awaited<ReturnType<ReturnType<typeof getGitHubDeps>["getOAuthSettings"]>> | null = null;
   let connected = false;
-  let settingsConfigured = false;
   let savedConnection: { connectionId: string } | null = null;
   let nangoFrontendConfig: Record<string, unknown> = {};
   let repositories: Awaited<ReturnType<ReturnType<typeof getGitHubDeps>["listRepositories"]>> = [];
@@ -71,7 +68,6 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
     ]);
     settings = loadedSettings;
     connected = status.status === "connected";
-    settingsConfigured = Boolean(loadedSettings.clientId && loadedSettings.clientSecret);
     // Nango render data via the host-injected `ctx.nango` port (optional
     // getters, null-safe — degrade if a host pinned to an older minor omits them).
     nangoFrontendConfig = (await ctx.nango.getFrontendConfig?.()) ?? {};
@@ -125,8 +121,12 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
                   {/* Configuration fields — stacked, single-column (§II item 6).
                       Pure-white inputs with the navy hairline border (Input:
                       bg-surface-strong + border-input, radius 7). Each field
-                      keeps its own helper text. */}
-                  <form action={saveGitHubConnectionAction} className="flex flex-col gap-4">
+                      keeps its own helper text. This is a field GROUP, not a
+                      self-submitting form: the standalone "Save GitHub
+                      administration" button was removed per the owner review on
+                      PR #45 — the Connect button below persists these
+                      credentials (reading them by `id`) before it connects. */}
+                  <form id="github-oauth-form" className="flex flex-col gap-4">
                     <Label className="grid gap-1.5 text-sm font-medium text-foreground">
                       Client ID
                       <Input name="clientId" defaultValue={settings?.clientId ?? ""} autoComplete="off" />
@@ -162,26 +162,22 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
                       </span>
                     </div>
 
-                    <div>
-                      <Button type="submit">Save GitHub administration</Button>
-                    </div>
                   </form>
 
                   {/* Actions — side by side, never stacked (§II item 7):
                       Connect (indigo primary) always available (item 8), and
                       Disconnect (destructive, unplug) disabled until connected.
-                      Connect is the shared Nango OAuth trigger; the OAuth-app
-                      credentials above must be saved first for it to succeed. */}
+                      Connect persists the OAuth-app credentials above (the save
+                      folded in from the removed button, PR #45) and then runs
+                      the shared Nango OAuth trigger. */}
                   <div className="flex flex-wrap items-center gap-3">
-                    <NangoUserConnectButton
+                    <ConnectGitHubButton
                       connectorKey="github"
                       connected={connected}
-                      leadingIcon={<Plug className="size-4" aria-hidden />}
                       reconnectConnectionId={savedConnection?.connectionId}
-                      connectLabel="Connect"
-                      reconnectLabel="Reconnect"
-                      disabled={!settingsConfigured && !connected}
+                      formId="github-oauth-form"
                       nangoFrontendConfig={nangoFrontendConfig}
+                      saveOAuthAction={saveGitHubOAuthSettingsForConnect}
                     />
                     <DisconnectAction connected={connected} disconnectAction={disconnectGitHubConnectionAction} />
                   </div>
@@ -283,8 +279,8 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
           <section>
             <h3 className="text-base font-semibold text-foreground">Steps</h3>
             <ol className="mt-2 list-decimal space-y-2 pl-5">
-              <li>On the <span className="font-medium text-foreground">Setup</span> tab, paste the OAuth app&apos;s Client ID and Client secret, then Save.</li>
-              <li>Press <span className="font-medium text-foreground">Connect</span> — you will be sent to GitHub to authorize the app.</li>
+              <li>On the <span className="font-medium text-foreground">Setup</span> tab, paste the OAuth app&apos;s Client ID and Client secret.</li>
+              <li>Press <span className="font-medium text-foreground">Connect</span> — Cinatra saves those credentials and sends you to GitHub to authorize the app.</li>
               <li>Once the connection is active, choose the repository Cinatra should manage.</li>
               <li>Use <span className="font-medium text-foreground">Disconnect</span> to remove the connection; the connector stops working until you connect again.</li>
             </ol>
