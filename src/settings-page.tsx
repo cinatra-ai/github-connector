@@ -124,6 +124,24 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
                 </div>
               ) : (
                 <div className="flex flex-col gap-6">
+                  {/* Setup ordering (#54): the OAuth-app prerequisite and the
+                      credentials-before-Connect sequence used to live ONLY on
+                      the Help tab — the default tab showed two empty fields
+                      beside a primary Connect with no ordering cue. State the
+                      sequence here, with the OAuth-app surface linked inline
+                      (same link idiom as Help). */}
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Connecting takes three steps: create a GitHub OAuth app at{" "}
+                    <Link
+                      href="https://github.com/settings/developers"
+                      className="font-medium text-foreground underline underline-offset-4"
+                    >
+                      github.com/settings/developers
+                    </Link>{" "}
+                    — registering the Callback URL shown below — then enter the app&apos;s Client ID and
+                    Client secret here, then press Connect. Connect saves the credentials and starts the
+                    GitHub authorization; it cannot create the OAuth app for you.
+                  </p>
                   {/* Configuration fields — stacked, single-column (§II item 6).
                       Pure-white inputs with the navy hairline border (Input:
                       bg-surface-strong + border-input, radius 7). Each field
