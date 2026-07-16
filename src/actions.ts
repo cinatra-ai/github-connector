@@ -127,8 +127,11 @@ export async function disconnectGitHubConnectionAction() {
 // redirects, so the client island can swap its transient "Checking…" badge for
 // the resolved one in place. Manage-gated: it is a control on the manage-gated
 // settings surface.
-export async function checkGitHubStatusAction(): Promise<"connected" | "disconnected"> {
+export async function checkGitHubStatusAction(): Promise<"connected" | "incomplete" | "not_connected"> {
   await requireExtensionAction(PACKAGE_NAME, "manage");
   const status = await getGitHubDeps().getStatus();
-  return status.status === "connected" ? "connected" : "disconnected";
+  // Full three-state (#53): "incomplete" (account connected, repository still
+  // unselected) must survive to the UI — collapsing it to "disconnected" is
+  // what hid the deadlock from the Check button too.
+  return status.status;
 }
