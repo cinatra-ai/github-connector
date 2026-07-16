@@ -43,53 +43,80 @@ import {
   AlertDialogTrigger,
 } from "./components/ui/dialog";
 
+// THREE-state connection lifecycle (#53). "incomplete" — account connected,
+// repository still unselected — is a REAL state Nango/getStatus reports; the
+// old boolean collapsed it into "disconnected", which both misinformed the
+// user and (combined with the picker's `connected` gate) deadlocked setup.
+export type GitHubConnectionState = "connected" | "incomplete" | "not_connected";
+
+// Badge rendering per state, within the sdk-ui badge language (green/red/
+// spinner). "incomplete" keeps the red action-needed chip but SAYS what is
+// missing instead of the false "Disconnected".
+const STATE_BADGE: Record<
+  GitHubConnectionState | "checking",
+  { status: ConnectionStatus; label?: string }
+> = {
+  connected: { status: "connected" },
+  incomplete: { status: "disconnected", label: "Repository required" },
+  not_connected: { status: "disconnected" },
+  checking: { status: "checking" },
+};
+
 export function ConnectionStatusPanel({
-  initialConnected,
+  initialState,
+  incompleteDetail,
   checkAction,
 }: {
-  initialConnected: boolean;
+  initialState: GitHubConnectionState;
+  /** getStatus()'s explanation for the incomplete state, shown under the card. */
+  incompleteDetail?: string;
   /** Server action that re-probes the live connection status. */
-  checkAction: () => Promise<"connected" | "disconnected">;
+  checkAction: () => Promise<GitHubConnectionState>;
 }) {
-  const [status, setStatus] = React.useState<ConnectionStatus>(
-    initialConnected ? "connected" : "disconnected",
-  );
+  const [state, setState] = React.useState<GitHubConnectionState | "checking">(initialState);
   const [isPending, startTransition] = React.useTransition();
 
   function onCheck() {
     // Guard against overlapping checks (the button is also disabled while
     // pending): a second probe must not race an in-flight one and let an older
     // response overwrite a newer result.
-    if (status === "checking") return;
+    if (state === "checking") return;
     // Capture the last-known status so a probe FAILURE restores it rather than
     // misreporting a network / auth / server error as "Disconnected" (only a
     // resolved probe changes the badge).
-    const previous = status;
-    setStatus("checking");
+    const previous = state;
+    setState("checking");
     startTransition(async () => {
       try {
-        setStatus(await checkAction());
+        setState(await checkAction());
       } catch {
-        setStatus(previous);
+        setState(previous);
       }
     });
   }
 
+  const badge = STATE_BADGE[state];
   return (
-    <ConnectionStatusCard
-      status={status}
-      action={
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCheck}
-          disabled={isPending || status === "checking"}
-        >
-          <RefreshCw aria-hidden="true" />
-          Check
-        </Button>
-      }
-    />
+    <div className="flex flex-col gap-2">
+      <ConnectionStatusCard
+        status={badge.status}
+        label={badge.label}
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCheck}
+            disabled={isPending || state === "checking"}
+          >
+            <RefreshCw aria-hidden="true" />
+            Check
+          </Button>
+        }
+      />
+      {state === "incomplete" && incompleteDetail ? (
+        <p className="text-xs text-muted-foreground">{incompleteDetail}</p>
+      ) : null}
+    </div>
   );
 }
 

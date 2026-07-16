@@ -56,7 +56,12 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
   // `error` state (§II item 9) instead of throwing the whole route.
   let loadError = false;
   let settings: Awaited<ReturnType<ReturnType<typeof getGitHubDeps>["getOAuthSettings"]>> | null = null;
-  let connected = false;
+  // THREE-state connection status (#53): collapsing "incomplete" (account
+  // connected, repository still unselected) into a boolean created a deadlock —
+  // the repository picker was gated on `connected`, but `connected` required a
+  // selected repository, so a fresh OAuth connection could never be completed.
+  let connectionState: "connected" | "incomplete" | "not_connected" = "not_connected";
+  let statusDetail: string | undefined;
   let savedConnection: { connectionId: string } | null = null;
   let nangoFrontendConfig: Record<string, unknown> = {};
   let repositories: Awaited<ReturnType<ReturnType<typeof getGitHubDeps>["listRepositories"]>> = [];
@@ -67,7 +72,8 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
       getGitHubDeps().getStatus(),
     ]);
     settings = loadedSettings;
-    connected = status.status === "connected";
+    connectionState = status.status;
+    statusDetail = status.status === "incomplete" ? status.detail : undefined;
     // Nango render data via the host-injected `ctx.nango` port (optional
     // getters, null-safe — degrade if a host pinned to an older minor omits them).
     nangoFrontendConfig = (await ctx.nango.getFrontendConfig?.()) ?? {};
@@ -166,26 +172,34 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
 
                   {/* Actions — side by side, never stacked (§II item 7):
                       Connect (indigo primary) always available (item 8), and
-                      Disconnect (destructive, unplug) disabled until connected.
+                      Disconnect (destructive, unplug) disabled until a
+                      connection EXISTS — including the "incomplete" state, so a
+                      stuck connection can always be cleared (#53).
                       Connect persists the OAuth-app credentials above (the save
                       folded in from the removed button, PR #45) and then runs
                       the shared Nango OAuth trigger. */}
                   <div className="flex flex-wrap items-center gap-3">
                     <ConnectGitHubButton
                       connectorKey="github"
-                      connected={connected}
+                      connected={connectionState !== "not_connected"}
                       reconnectConnectionId={savedConnection?.connectionId}
                       formId="github-oauth-form"
                       nangoFrontendConfig={nangoFrontendConfig}
                       saveOAuthAction={saveGitHubOAuthSettingsForConnect}
                     />
-                    <DisconnectAction connected={connected} disconnectAction={disconnectGitHubConnectionAction} />
+                    <DisconnectAction
+                      connected={connectionState !== "not_connected"}
+                      disconnectAction={disconnectGitHubConnectionAction}
+                    />
                   </div>
 
                   {/* Repository selection — GitHub-specific configuration that
-                      only applies once a connection exists (single-column,
-                      stacked; part of the Setup config, not a separate tab). */}
-                  {connected && savedConnection ? (
+                      applies once a connection EXISTS. Gated on the saved
+                      connection, NOT on `connected` (#53): `connected` requires
+                      a selected repository, and the repository is selected
+                      HERE — gating this picker on it deadlocked the connector
+                      at "incomplete" forever. */}
+                  {savedConnection ? (
                     repositories.length > 0 ? (
                       <form action={saveGitHubRepositorySelectionAction} className="flex flex-col gap-2">
                         <Label className="grid gap-1.5 text-sm font-medium text-foreground">
@@ -228,7 +242,11 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
                  divider, a status badge with icon + label, and a full-width
                  Check action beneath it. Pressing Check swaps in the transient
                  "Checking…" badge until the re-probe resolves. */
-              <ConnectionStatusPanel initialConnected={connected} checkAction={checkGitHubStatusAction} />
+              <ConnectionStatusPanel
+                initialState={connectionState}
+                incompleteDetail={statusDetail}
+                checkAction={checkGitHubStatusAction}
+              />
             }
           />
         </TabsContent>
