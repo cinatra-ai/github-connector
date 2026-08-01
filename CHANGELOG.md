@@ -7,11 +7,11 @@ project's merged pull request and release-tag history.
 
 Pairs with Cinatra 0.1.7, which removes the core GitHub client.
 
-- feat(connection-client): own the GitHub connection client, relocated from Cinatra core and registered under the same existing host capability id (provider flip, no contract change), persisting and authorizing through published host capabilities including the instance-connection gate (cinatra#975 W3) (#36)
+- feat(connection-client): own the GitHub connection client, relocated from Cinatra core and registered under the same existing host capability id (provider flip, no contract change), persisting and authorizing through published host capabilities including the instance-connection gate (#36)
 
 ## v0.1.2 — 2026-07-04
 
-- feat: final connection access-scoping declaration — default scope "admin" (cinatra#954 W4) (#35)
+- feat: final connection access-scoping declaration — default scope "admin" (#35)
 - fix(setup): remove the extension-rendered connection-status pill (#29)
 - fix(ui): shadcn raw-element fixes + ramp ui-gate to error (#21)
 - chore(manifest): add the declared SDK ABI range to the cinatra block (#30); add cinatra.vendor connector provenance metadata (#32)
@@ -29,7 +29,7 @@ Pairs with Cinatra 0.1.7, which removes the core GitHub client.
 - chore: keep internal planning notes untracked (#5)
 - chore: npm files allowlist + git-archive export-ignore (packaging hygiene) (#6)
 - ci: adopt the org ui-design-system gate (#7)
-- Bind the GitHub connection surface through a host deps slot (cinatra#172 Stage H4) (#8)
+- Bind the GitHub connection surface through a host deps slot (#8)
 - chore: Configure Renovate (#9)
 - ci(release): grant contents: write + pin reusable workflow to .github HEAD (#11)
 - ci: repin reusable release workflow (immutable-safe decoration + corrected build-input provisioning) (#12)
