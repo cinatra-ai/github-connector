@@ -7,7 +7,8 @@
     "src",
     "!src/__tests__"
   ,
-    "cinatra"],
+    "cinatra",
+    "logo.svg"],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -52,6 +53,7 @@
       "name": "Cinatra"
     },
     "displayName": "GitHub",
+    "logo": "./logo.svg",
     "sdkAbiRange": "^2",
     "serverEntry": "./register",
     "requestedHostPorts": [
