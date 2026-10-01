@@ -30,8 +30,8 @@ import { ConnectionStatusCard } from "@cinatra-ai/sdk-ui/connection-status-card"
 import type { ConnectionStatus } from "@cinatra-ai/sdk-ui/connection-status-badge";
 import { NangoUserConnectButton } from "@cinatra-ai/sdk-ui/nango";
 import type { NangoFrontendConfig } from "@cinatra-ai/sdk-ui/nango";
-import { Button } from "./components/ui/button";
 import {
+  Button,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -41,7 +41,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "./components/ui/dialog";
+} from "@cinatra-ai/design-primitives";
 
 // THREE-state connection lifecycle (#53). "incomplete" — account connected,
 // repository still unselected — is a REAL state Nango/getStatus reports; the
