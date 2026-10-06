@@ -19,10 +19,7 @@ import { Tabs, TabsListRow, TabsTrigger, TabsContent } from "@cinatra-ai/sdk-ui/
 // replaces the three raw in-page banner <div>s).
 import { SearchParamToast } from "@cinatra-ai/sdk-ui/search-param-toast";
 import type { ExtensionHostContext } from "@cinatra-ai/sdk-extensions";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
-import { Label } from "./components/ui/label";
-import { Select } from "./components/ui/select";
+import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cinatra-ai/design-primitives";
 import { GITHUB_FLASH_TOASTS } from "./github-flash";
 import { ConnectGitHubButton, ConnectionStatusPanel, DisconnectAction } from "./setup-client";
 import {
@@ -221,14 +218,18 @@ export async function GitHubSettingsPage({ searchParams, ctx }: GitHubSettingsPa
                     repositories.length > 0 ? (
                       <form action={saveGitHubRepositorySelectionAction} className="flex flex-col gap-2">
                         <Label className="grid gap-1.5 text-sm font-medium text-foreground">
-                          Repository
+                          <span id="github-repository-label">Repository</span>
                           <Select name="repositoryFullName" defaultValue={settings?.selectedRepositoryFullName ?? ""}>
-                            <option value="">Choose a repository</option>
-                            {repositories.map((repository) => (
-                              <option key={repository.id} value={repository.fullName}>
-                                {repository.fullName} ({repository.visibility})
-                              </option>
-                            ))}
+                            <SelectTrigger aria-labelledby="github-repository-label">
+                              <SelectValue placeholder="Choose a repository" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {repositories.map((repository) => (
+                                <SelectItem key={repository.id} value={repository.fullName}>
+                                  {repository.fullName} ({repository.visibility})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
                           </Select>
                           <span className="text-xs font-normal text-muted-foreground">
                             The GitHub repository Cinatra reads from and writes to.
